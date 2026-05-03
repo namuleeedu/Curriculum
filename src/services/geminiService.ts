@@ -63,13 +63,12 @@ export async function parseCurriculumFile(base64Data: string, mimeType: string) 
   } catch (e: any) {
     const errorMessage = e?.message || String(e);
     
-    // 403 에러 발생 시 안내 문구 추가
     if (errorMessage.includes("403")) {
-      throw new Error("API 키 권한 오류(403)가 발생했습니다. Vercel의 API 키 설정과 구글 AI 스튜디오의 키 상태를 확인해주세요.");
+      throw new Error("API 키 권한 오류(403)가 발생했습니다.");
     }
     
     if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
-      throw new Error("현재 서버 부하가 많습니다. 잠시 후(10~30초) 다시 시도해주세요.");
+      throw new Error("현재 서버 부하가 많습니다. 잠시 후 다시 시도해주세요.");
     }
     
     console.error("Gemini Analysis Error:", e);
