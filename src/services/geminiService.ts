@@ -5,7 +5,7 @@
 
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 
-const ai = new GoogleGenerativeAI({ apiKey: import.meta.env.VITE_GOOGLE_API_KEY });
+const ai = new GoogleGenerativeAI({ apiKey: process.env.GOOGLE_API_KEY });
 
 export async function parseCurriculumFile(base64Data: string, mimeType: string) {
   const prompt = `
