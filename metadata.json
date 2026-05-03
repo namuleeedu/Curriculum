@@ -1,0 +1,6 @@
+{
+  "name": "전입생 교육과정 분석 전문가",
+  "description": "전입생의 교육과정 이수 시수를 분석하고 국가 기준 시수와 비교하여 미이수 과목을 판정하는 전문 도구입니다.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
