@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const ai = new GoogleGenerativeAI({ apiKey: import.meta.env.VITE_GOOGLE_API_KEY });
+// Vercel의 환경 변수에서 키를 가져옵니다.
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GOOGLE_API_KEY);
 
 export async function parseCurriculumFile(base64Data: string, mimeType: string) {
   const prompt = `
@@ -19,57 +20,36 @@ export async function parseCurriculumFile(base64Data: string, mimeType: string) 
     5. 과목군: 국어, 수학, 영어, 사회(역사/도덕 포함), 과학(정보/기술·가정 포함), 체육, 예술(음악/미술), 선택(한문/제2외국어/진로 등)을 모두 포함하세요.
     
     데이터가 정확하지 않으면 전입생 처리에 오류가 발생하니 매우 신중하게 숫자를 판독해 주세요.
+    반드시 순수한 JSON 형식으로만 응답하세요.
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
-            { inlineData: { data: base64Data, mimeType } }
-          ]
-        }
-      ],
-      config: {
+    // 모델 명칭을 실존하는 안정적인 버전인 'gemini-1.5-flash'로 수정했습니다.
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      generationConfig: {
         responseMimeType: "application/json",
         temperature: 0,
-        candidateCount: 1,
-        maxOutputTokens: 2048, // 8192 might be causing issues if thinking takes too much, let's keep it reasonable
-        thinkingConfig: {
-          thinkingLevel: ThinkingLevel.LOW
-        },
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            subjects: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  hours: {
-                    type: Type.ARRAY,
-                    items: { type: Type.NUMBER },
-                    description: "6 semesters: [1-1, 1-2, 2-1, 2-2, 3-1, 3-2]"
-                  }
-                },
-                required: ["name", "hours"]
-              }
-            }
-          },
-          required: ["subjects"]
-        }
-      }
+      },
     });
 
-    let text = response.text;
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType
+        }
+      }
+    ]);
+
+    const response = await result.response;
+    let text = response.text();
+    
     if (!text) throw new Error("분석 결과가 비어있습니다.");
 
     text = text.trim();
-    // Remove potential markdown blocks if present
+    // 마크다운 블록 제거
     if (text.startsWith("```")) {
       text = text.replace(/^```[a-z]*\s*/, "").replace(/\s*```$/, "");
     }
@@ -77,16 +57,22 @@ export async function parseCurriculumFile(base64Data: string, mimeType: string) 
     try {
       return JSON.parse(text);
     } catch (parseError) {
-      console.error("JSON Parse Error. Length:", text.length, "Text Preview:", text.substring(text.length - 100));
-      throw new Error("분석 결과 데이터가 중단되었습니다. 파일 내용을 줄이거나 다시 시도해 주세요.");
+      console.error("JSON Parse Error:", text);
+      throw new Error("분석 결과 데이터 해석에 실패했습니다.");
     }
   } catch (e: any) {
-    const errorMessage = e?.message || e?.statusText || String(e);
-    if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("high demand")) {
-      throw new Error("현재 인공지능 서버 부하가 많습니다. 잠시 후(10~30초) 다시 '분석 실행' 버튼을 눌러주세요.");
+    const errorMessage = e?.message || String(e);
+    
+    // 403 에러 발생 시 안내 문구 추가
+    if (errorMessage.includes("403")) {
+      throw new Error("API 키 권한 오류(403)가 발생했습니다. Vercel의 API 키 설정과 구글 AI 스튜디오의 키 상태를 확인해주세요.");
+    }
+    
+    if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
+      throw new Error("현재 서버 부하가 많습니다. 잠시 후(10~30초) 다시 시도해주세요.");
     }
     
     console.error("Gemini Analysis Error:", e);
-    throw new Error("교육과정 분석 중 오류가 발생했습니다. (파일 크기 또는 서버 오류)");
+    throw new Error("교육과정 분석 중 오류가 발생했습니다.");
   }
 }
